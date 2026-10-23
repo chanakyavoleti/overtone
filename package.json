@@ -20,6 +20,7 @@
     "@types/react-dom": "^19",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
+    "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.4",
     "iron-session": "^9.0.1",
     "lucide-react": "^1.57.0",
@@ -28,12 +29,11 @@
     "react-dom": "19.3.0",
     "slugify": "^1.6.9",
     "typescript": "^5",
+    "vitest": "^3.2.7",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.11",
     "eslint": "^9",
-    "eslint-config-next": "16.4.1",
-    "vitest": "^3.2.7"
+    "eslint-config-next": "16.4.1"
   }
 }
