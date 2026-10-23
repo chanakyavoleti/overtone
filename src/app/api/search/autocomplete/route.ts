@@ -8,6 +8,7 @@ import {
 } from '@/lib/metadata/normalization';
 import { searchDeezerArtists, isValidDeezerPhoto } from '@/lib/metadata/providers/deezer';
 import { searchITunesArtists } from '@/lib/metadata/providers/itunes';
+import { isSpotifyConfigured, searchSpotifyArtists } from '@/lib/metadata/providers/spotify';
 import { VERIFIED_ARTIST_PHOTOS } from '@/lib/db/discographyService';
 
 export async function GET(request: NextRequest) {
@@ -92,19 +93,27 @@ export async function GET(request: NextRequest) {
           setTimeout(() => reject(new Error('Autocomplete external timeout')), 1500)
         );
 
-        const externalFetch = Promise.allSettled([
-          searchITunesArtists(query, 5),
-          searchDeezerArtists(query, 5),
-        ]);
+        let externalCandidates: any[] = [];
 
-        const [itunesRes, deezerRes] = await Promise.race([externalFetch, timeoutPromise]) as [
-          PromiseSettledResult<any[]>,
-          PromiseSettledResult<any[]>
-        ];
+        if (isSpotifyConfigured()) {
+          // Spotify-exclusive provider
+          const spotifyFetch = searchSpotifyArtists(query, 5);
+          externalCandidates = await Promise.race([spotifyFetch, timeoutPromise]);
+        } else {
+          // Fallback legacy providers
+          const externalFetch = Promise.allSettled([
+            searchITunesArtists(query, 5),
+            searchDeezerArtists(query, 5),
+          ]);
 
-        const externalCandidates: any[] = [];
-        if (itunesRes.status === 'fulfilled') externalCandidates.push(...itunesRes.value);
-        if (deezerRes.status === 'fulfilled') externalCandidates.push(...deezerRes.value);
+          const [itunesRes, deezerRes] = (await Promise.race([externalFetch, timeoutPromise])) as [
+            PromiseSettledResult<any[]>,
+            PromiseSettledResult<any[]>
+          ];
+
+          if (itunesRes.status === 'fulfilled') externalCandidates.push(...itunesRes.value);
+          if (deezerRes.status === 'fulfilled') externalCandidates.push(...deezerRes.value);
+        }
 
         for (const ext of externalCandidates) {
           const score = calculateArtistMatchScore(query, ext.name, ext.aliases || []);

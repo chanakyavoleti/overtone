@@ -12,6 +12,7 @@ import RatingControl, { RatingBadge } from '@/components/ui/RatingControl';
 import ReviewSection from '@/components/music/ReviewSection';
 import SafeImage from '@/components/ui/SafeImage';
 import { Disc3, Clock, Calendar, Tag, ShieldAlert } from 'lucide-react';
+import { isSpotifyConfigured, fetchSpotifyTracks, searchSpotifyAlbums } from '@/lib/metadata/providers/spotify';
 import styles from './page.module.css';
 
 interface AlbumPageProps {
@@ -87,6 +88,7 @@ export default async function AlbumDetailPage({ params }: AlbumPageProps) {
         label: albums.label,
         runtimeSeconds: albums.runtimeSeconds,
         trackCount: albums.trackCount,
+        providerId: albums.providerId,
         artistId: albums.artistId,
         artistName: artists.name,
         artistSlug: artists.slug,
@@ -131,60 +133,122 @@ export default async function AlbumDetailPage({ params }: AlbumPageProps) {
 
     if (trackList.length === 0 && album.artistName) {
       try {
-        const itunesRes = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(`${album.artistName} ${album.title}`)}&entity=album&limit=1`,
-          { signal: AbortSignal.timeout(6000) }
-        );
-        if (itunesRes.ok) {
-          const itunesData = await itunesRes.json();
-          if (itunesData.results && itunesData.results[0]?.collectionId) {
-            const lookupRes = await fetch(
-              `https://itunes.apple.com/lookup?id=${itunesData.results[0].collectionId}&entity=song`,
-              { signal: AbortSignal.timeout(6000) }
-            );
-            if (lookupRes.ok) {
-              const lookupData = await lookupRes.json();
-              const songItems = lookupData.results.filter(
-                (x: any) => x.wrapperType === 'track' && x.trackName
-              );
-              const now = Math.floor(Date.now() / 1000);
-              let totalRuntime = 0;
-              for (const s of songItems) {
-                const trackSlug = slugify(`${s.trackName}-${s.trackNumber}`, { lower: true, strict: true }) || `track-${s.trackId}`;
-                const durationSeconds = s.trackTimeMillis ? Math.round(s.trackTimeMillis / 1000) : 0;
-                totalRuntime += durationSeconds;
-                db.insert(tracks).values({
-                  title: s.trackName,
-                  slug: trackSlug,
-                  albumId: album.id,
-                  artistId: album.artistId,
-                  trackNumber: s.trackNumber || 1,
-                  discNumber: s.discNumber || 1,
-                  durationSeconds,
-                  explicit: s.trackExplicitness === 'explicit' ? 1 : 0,
-                  createdAt: now,
-                }).onConflictDoNothing().run();
-              }
-              if (songItems.length > 0) {
-                db.update(albums).set({
-                  trackCount: songItems.length,
-                  runtimeSeconds: totalRuntime > 0 ? totalRuntime : null,
-                }).where(eq(albums.id, album.id)).run();
+        if (isSpotifyConfigured()) {
+          let spotifyTracks: Array<{
+            title: string;
+            slug: string;
+            trackNumber: number;
+            discNumber: number;
+            durationSeconds: number;
+            explicit: boolean;
+          }> = [];
 
-                trackList = db
-                  .select({
-                    id: tracks.id,
-                    title: tracks.title,
-                    slug: tracks.slug,
-                    trackNumber: tracks.trackNumber,
-                    discNumber: tracks.discNumber,
-                    durationSeconds: tracks.durationSeconds,
-                    explicit: tracks.explicit,
-                  })
-                  .from(tracks)
-                  .where(eq(tracks.albumId, album.id))
-                  .orderBy(asc(tracks.discNumber), asc(tracks.trackNumber), asc(tracks.id))
-                  .all();
+          if (album.providerId) {
+            spotifyTracks = await fetchSpotifyTracks(String(album.providerId));
+          }
+
+          if (spotifyTracks.length === 0) {
+            const foundAlbums = await searchSpotifyAlbums(`${album.artistName} ${album.title}`, 1);
+            if (foundAlbums.length > 0 && foundAlbums[0].providerId) {
+              spotifyTracks = await fetchSpotifyTracks(String(foundAlbums[0].providerId));
+            }
+          }
+
+          if (spotifyTracks.length > 0) {
+            const now = Math.floor(Date.now() / 1000);
+            let totalRuntime = 0;
+            for (const s of spotifyTracks) {
+              totalRuntime += s.durationSeconds;
+              db.insert(tracks).values({
+                title: s.title,
+                slug: s.slug,
+                albumId: album.id,
+                artistId: album.artistId,
+                trackNumber: s.trackNumber,
+                discNumber: s.discNumber,
+                durationSeconds: s.durationSeconds,
+                explicit: s.explicit ? 1 : 0,
+                createdAt: now,
+              }).onConflictDoNothing().run();
+            }
+
+            db.update(albums).set({
+              trackCount: spotifyTracks.length,
+              runtimeSeconds: totalRuntime > 0 ? totalRuntime : null,
+            }).where(eq(albums.id, album.id)).run();
+
+            trackList = db
+              .select({
+                id: tracks.id,
+                title: tracks.title,
+                slug: tracks.slug,
+                trackNumber: tracks.trackNumber,
+                discNumber: tracks.discNumber,
+                durationSeconds: tracks.durationSeconds,
+                explicit: tracks.explicit,
+              })
+              .from(tracks)
+              .where(eq(tracks.albumId, album.id))
+              .orderBy(asc(tracks.discNumber), asc(tracks.trackNumber), asc(tracks.id))
+              .all();
+          }
+        } else {
+          // Fallback legacy iTunes lookup
+          const itunesRes = await fetch(
+            `https://itunes.apple.com/search?term=${encodeURIComponent(`${album.artistName} ${album.title}`)}&entity=album&limit=1`,
+            { signal: AbortSignal.timeout(6000) }
+          );
+          if (itunesRes.ok) {
+            const itunesData = await itunesRes.json();
+            if (itunesData.results && itunesData.results[0]?.collectionId) {
+              const lookupRes = await fetch(
+                `https://itunes.apple.com/lookup?id=${itunesData.results[0].collectionId}&entity=song`,
+                { signal: AbortSignal.timeout(6000) }
+              );
+              if (lookupRes.ok) {
+                const lookupData = await lookupRes.json();
+                const songItems = lookupData.results.filter(
+                  (x: any) => x.wrapperType === 'track' && x.trackName
+                );
+                const now = Math.floor(Date.now() / 1000);
+                let totalRuntime = 0;
+                for (const s of songItems) {
+                  const trackSlug = slugify(`${s.trackName}-${s.trackNumber}`, { lower: true, strict: true }) || `track-${s.trackId}`;
+                  const durationSeconds = s.trackTimeMillis ? Math.round(s.trackTimeMillis / 1000) : 0;
+                  totalRuntime += durationSeconds;
+                  db.insert(tracks).values({
+                    title: s.trackName,
+                    slug: trackSlug,
+                    albumId: album.id,
+                    artistId: album.artistId,
+                    trackNumber: s.trackNumber || 1,
+                    discNumber: s.discNumber || 1,
+                    durationSeconds,
+                    explicit: s.trackExplicitness === 'explicit' ? 1 : 0,
+                    createdAt: now,
+                  }).onConflictDoNothing().run();
+                }
+                if (songItems.length > 0) {
+                  db.update(albums).set({
+                    trackCount: songItems.length,
+                    runtimeSeconds: totalRuntime > 0 ? totalRuntime : null,
+                  }).where(eq(albums.id, album.id)).run();
+
+                  trackList = db
+                    .select({
+                      id: tracks.id,
+                      title: tracks.title,
+                      slug: tracks.slug,
+                      trackNumber: tracks.trackNumber,
+                      discNumber: tracks.discNumber,
+                      durationSeconds: tracks.durationSeconds,
+                      explicit: tracks.explicit,
+                    })
+                    .from(tracks)
+                    .where(eq(tracks.albumId, album.id))
+                    .orderBy(asc(tracks.discNumber), asc(tracks.trackNumber), asc(tracks.id))
+                    .all();
+                }
               }
             }
           }

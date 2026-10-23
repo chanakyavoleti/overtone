@@ -21,7 +21,13 @@ import {
 import { searchITunesArtists, fetchITunesDiscography, fetchITunesTracks } from './providers/itunes';
 import { searchDeezerArtists, fetchDeezerDiscography, isValidDeezerPhoto } from './providers/deezer';
 import { searchMusicBrainzArtists } from './providers/musicbrainz';
-import { searchSpotifyArtists } from './providers/spotify';
+import {
+  isSpotifyConfigured,
+  searchSpotifyArtists,
+  fetchSpotifyDiscography,
+  fetchSpotifyTracks,
+  getSpotifyArtistPhoto,
+} from './providers/spotify';
 import { selectBestArtwork, isValidArtworkUrl, upgradeArtworkResolution } from './artworkService';
 import { VERIFIED_ARTIST_PHOTOS } from '../db/discographyService';
 
@@ -126,18 +132,25 @@ export async function searchArtistsUnified(
 
   if ((!hasExactLocal || matchedLocal.length < 5) && cleanQ.length >= 2 && includeExternal) {
     try {
-      // Run external queries in parallel
-      const [itunesResults, deezerResults, mbResults, spotifyResults] = await Promise.all([
-        searchITunesArtists(cleanQ).catch(() => []),
-        searchDeezerArtists(cleanQ).catch(() => []),
-        searchMusicBrainzArtists(cleanQ).catch(() => []),
-        searchSpotifyArtists(cleanQ).catch(() => []),
-      ]);
+      let externalResults: NormalizedArtist[] = [];
+
+      if (isSpotifyConfigured()) {
+        // Exclusive Spotify Provider: query only Spotify for clean, accurate official data
+        externalResults = await searchSpotifyArtists(cleanQ, 10).catch(() => []);
+      } else {
+        // Fallback to legacy multi-provider search only if Spotify is not configured
+        const [itunesResults, deezerResults, mbResults] = await Promise.all([
+          searchITunesArtists(cleanQ).catch(() => []),
+          searchDeezerArtists(cleanQ).catch(() => []),
+          searchMusicBrainzArtists(cleanQ).catch(() => []),
+        ]);
+        externalResults = [...itunesResults, ...deezerResults, ...mbResults];
+      }
 
       // Combine external results and find top candidate to import/update
       const candidateMap = new Map<string, NormalizedArtist>();
 
-      for (const item of [...itunesResults, ...deezerResults, ...mbResults, ...spotifyResults]) {
+      for (const item of externalResults) {
         const normKey = normalizeSearchQuery(item.name);
         const existing = candidateMap.get(normKey);
 
@@ -168,7 +181,7 @@ export async function searchArtistsUnified(
         let artistId: number;
 
         let bestPhoto = candidate.imageUrl;
-        if (VERIFIED_ARTIST_PHOTOS[candidate.slug]) {
+        if (!bestPhoto && VERIFIED_ARTIST_PHOTOS[candidate.slug]) {
           bestPhoto = VERIFIED_ARTIST_PHOTOS[candidate.slug];
         }
 
@@ -211,8 +224,11 @@ export async function searchArtistsUnified(
           }
         } else {
           artistId = existingLocal.id;
-          // Update photo or aliases if missing
-          if (!existingLocal.imageUrl && bestPhoto) {
+          // Update photo to official Spotify photo if candidate is from Spotify or local photo is missing/outdated
+          if (candidate.provider === 'spotify' && bestPhoto && existingLocal.imageUrl !== bestPhoto) {
+            db.update(artists).set({ imageUrl: bestPhoto }).where(eq(artists.id, artistId)).run();
+            existingLocal.imageUrl = bestPhoto;
+          } else if (!existingLocal.imageUrl && bestPhoto) {
             db.update(artists).set({ imageUrl: bestPhoto }).where(eq(artists.id, artistId)).run();
             existingLocal.imageUrl = bestPhoto;
           }
@@ -290,38 +306,72 @@ export async function enrichArtistDiscographyUnified(
   let discoveredReleases: NormalizedAlbum[] = [];
 
   try {
-    // 1. Fetch iTunes multi-store discography (up to 200 per store)
-    const itunesAlbums = await fetchITunesDiscography(artist.name);
-    pagesProcessed += 2;
-    discoveredReleases.push(...itunesAlbums);
+    if (isSpotifyConfigured()) {
+      // 1. Official Spotify Discovery & Discography (Exclusive Provider)
+      const spArtists = await searchSpotifyArtists(artist.name, 1);
+      if (spArtists.length > 0) {
+        const spArtist = spArtists[0];
+        pagesProcessed += 1;
 
-    // If Kanye West, also pull collaborative releases under ¥$ (Vultures 1, Vultures 2)
-    if (artist.slug === 'kanye-west') {
-      try {
-        const vulturesAlbums = await fetchITunesDiscography('¥$');
-        discoveredReleases.push(...vulturesAlbums);
-      } catch {
-        // ignore
+        // Upgrade artist photo with official high-res Spotify portrait
+        if (spArtist.imageUrl) {
+          db.update(artists).set({ imageUrl: spArtist.imageUrl }).where(eq(artists.id, artistId)).run();
+        }
+
+        // Fetch official Spotify discography (albums, singles, compilations)
+        if (spArtist.providerId) {
+          const spAlbums = await fetchSpotifyDiscography(String(spArtist.providerId), 150);
+          pagesProcessed += Math.max(1, Math.ceil(spAlbums.length / 10));
+          discoveredReleases.push(...spAlbums);
+        }
+
+        // Collaborative releases: Kanye West (¥$ releases: VULTURES 1, VULTURES 2)
+        if (artist.slug === 'kanye-west') {
+          try {
+            const vulturesArtist = await searchSpotifyArtists('¥$', 1);
+            if (vulturesArtist.length > 0 && vulturesArtist[0].providerId) {
+              const vulturesAlbums = await fetchSpotifyDiscography(String(vulturesArtist[0].providerId), 20);
+              discoveredReleases.push(...vulturesAlbums);
+            }
+          } catch {
+            // ignore
+          }
+        }
       }
-    }
+    } else {
+      // Fallback: Fetch iTunes multi-store discography (up to 200 per store)
+      const itunesAlbums = await fetchITunesDiscography(artist.name);
+      pagesProcessed += 2;
+      discoveredReleases.push(...itunesAlbums);
 
-    // 2. Fetch Deezer discography with multi-page pagination
-    const deezerSearch = await searchDeezerArtists(artist.name);
-    if (deezerSearch.length > 0) {
-      const dzArtist = deezerSearch[0];
-      if (dzArtist.providerId) {
-        const deezerAlbums = await fetchDeezerDiscography(dzArtist.providerId, 4);
-        pagesProcessed += 4;
-        discoveredReleases.push(...deezerAlbums);
+      // If Kanye West, also pull collaborative releases under ¥$ (Vultures 1, Vultures 2)
+      if (artist.slug === 'kanye-west') {
+        try {
+          const vulturesAlbums = await fetchITunesDiscography('¥$');
+          discoveredReleases.push(...vulturesAlbums);
+        } catch {
+          // ignore
+        }
+      }
 
-        // Update artist photo if local is missing or invalid
-        if (
-          !artist.imageUrl ||
-          artist.imageUrl.includes('3c3577ebb5364e574d8276204ea0d1f5') ||
-          !isValidDeezerPhoto(artist.imageUrl)
-        ) {
-          if (dzArtist.imageUrl && isValidDeezerPhoto(dzArtist.imageUrl)) {
-            db.update(artists).set({ imageUrl: dzArtist.imageUrl }).where(eq(artists.id, artistId)).run();
+      // Fetch Deezer discography with multi-page pagination
+      const deezerSearch = await searchDeezerArtists(artist.name);
+      if (deezerSearch.length > 0) {
+        const dzArtist = deezerSearch[0];
+        if (dzArtist.providerId) {
+          const deezerAlbums = await fetchDeezerDiscography(dzArtist.providerId, 4);
+          pagesProcessed += 4;
+          discoveredReleases.push(...deezerAlbums);
+
+          // Update artist photo if local is missing or invalid
+          if (
+            !artist.imageUrl ||
+            artist.imageUrl.includes('3c3577ebb5364e574d8276204ea0d1f5') ||
+            !isValidDeezerPhoto(artist.imageUrl)
+          ) {
+            if (dzArtist.imageUrl && isValidDeezerPhoto(dzArtist.imageUrl)) {
+              db.update(artists).set({ imageUrl: dzArtist.imageUrl }).where(eq(artists.id, artistId)).run();
+            }
           }
         }
       }
@@ -447,41 +497,79 @@ export async function enrichArtistDiscographyUnified(
       .where(eq(tracks.albumId, currentAlbumId))
       .get()?.count ?? 0;
 
-    if (existingTrackCount === 0 && alb.provider === 'itunes' && alb.providerId && storedCount <= 12) {
-      try {
-        const songTracks = await fetchITunesTracks(alb.providerId);
-        let totalRuntime = 0;
+    if (existingTrackCount === 0 && storedCount <= 15) {
+      if (alb.provider === 'spotify' && alb.providerId) {
+        try {
+          const songTracks = await fetchSpotifyTracks(String(alb.providerId));
+          let totalRuntime = 0;
 
-        for (const t of songTracks) {
-          totalRuntime += t.durationSeconds;
-          db.insert(tracks)
-            .values({
-              title: t.title,
-              slug: t.slug,
-              albumId: currentAlbumId,
-              artistId,
-              trackNumber: t.trackNumber,
-              discNumber: t.discNumber,
-              durationSeconds: t.durationSeconds,
-              explicit: t.explicit ? 1 : 0,
-              createdAt: now,
-            })
-            .onConflictDoNothing()
-            .run();
-        }
+          for (const t of songTracks) {
+            totalRuntime += t.durationSeconds;
+            db.insert(tracks)
+              .values({
+                title: t.title,
+                slug: t.slug,
+                albumId: currentAlbumId,
+                artistId,
+                trackNumber: t.trackNumber,
+                discNumber: t.discNumber,
+                durationSeconds: t.durationSeconds,
+                explicit: t.explicit ? 1 : 0,
+                createdAt: now,
+              })
+              .onConflictDoNothing()
+              .run();
+          }
 
-        if (songTracks.length > 0) {
-          db.update(albums)
-            .set({
-              trackCount: songTracks.length,
-              runtimeSeconds: totalRuntime > 0 ? totalRuntime : null,
-            })
-            .where(eq(albums.id, currentAlbumId))
-            .run();
-          tracksCount++;
+          if (songTracks.length > 0) {
+            db.update(albums)
+              .set({
+                trackCount: songTracks.length,
+                runtimeSeconds: totalRuntime > 0 ? totalRuntime : null,
+              })
+              .where(eq(albums.id, currentAlbumId))
+              .run();
+            tracksCount++;
+          }
+        } catch {
+          // Track lookup failure is non-fatal
         }
-      } catch {
-        // Track lookup failure is non-fatal
+      } else if (alb.provider === 'itunes' && alb.providerId) {
+        try {
+          const songTracks = await fetchITunesTracks(alb.providerId);
+          let totalRuntime = 0;
+
+          for (const t of songTracks) {
+            totalRuntime += t.durationSeconds;
+            db.insert(tracks)
+              .values({
+                title: t.title,
+                slug: t.slug,
+                albumId: currentAlbumId,
+                artistId,
+                trackNumber: t.trackNumber,
+                discNumber: t.discNumber,
+                durationSeconds: t.durationSeconds,
+                explicit: t.explicit ? 1 : 0,
+                createdAt: now,
+              })
+              .onConflictDoNothing()
+              .run();
+          }
+
+          if (songTracks.length > 0) {
+            db.update(albums)
+              .set({
+                trackCount: songTracks.length,
+                runtimeSeconds: totalRuntime > 0 ? totalRuntime : null,
+              })
+              .where(eq(albums.id, currentAlbumId))
+              .run();
+            tracksCount++;
+          }
+        } catch {
+          // Track lookup failure is non-fatal
+        }
       }
     } else if (existingTrackCount > 0) {
       tracksCount++;
@@ -527,16 +615,20 @@ export async function getOrImportArtistBySlug(slug: string): Promise<any | null>
 
   // 2. Query external metadata providers dynamically
   const queryName = cleanSlug.replace(/-/g, ' ');
-  const [itunesRes, deezerRes, spotifyRes] = await Promise.allSettled([
-    searchITunesArtists(queryName, 5),
-    searchDeezerArtists(queryName, 5),
-    searchSpotifyArtists(queryName, 5),
-  ]);
+  let candidates: NormalizedArtist[] = [];
 
-  const candidates: NormalizedArtist[] = [];
-  if (itunesRes.status === 'fulfilled') candidates.push(...itunesRes.value);
-  if (deezerRes.status === 'fulfilled') candidates.push(...deezerRes.value);
-  if (spotifyRes.status === 'fulfilled') candidates.push(...spotifyRes.value);
+  if (isSpotifyConfigured()) {
+    // Exclusive Spotify Provider
+    candidates = await searchSpotifyArtists(queryName, 5).catch(() => []);
+  } else {
+    // Legacy fallback
+    const [itunesRes, deezerRes] = await Promise.allSettled([
+      searchITunesArtists(queryName, 5),
+      searchDeezerArtists(queryName, 5),
+    ]);
+    if (itunesRes.status === 'fulfilled') candidates.push(...itunesRes.value);
+    if (deezerRes.status === 'fulfilled') candidates.push(...deezerRes.value);
+  }
 
   if (candidates.length === 0) {
     return null;

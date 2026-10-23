@@ -148,7 +148,7 @@ export async function searchSpotifyArtists(
  */
 export async function fetchSpotifyDiscography(
   spotifyArtistId: string,
-  maxAlbums = 100
+  maxAlbums = 150
 ): Promise<NormalizedAlbum[]> {
   const token = await getSpotifyAccessToken();
   if (!token) {
@@ -156,10 +156,12 @@ export async function fetchSpotifyDiscography(
   }
 
   const albums: NormalizedAlbum[] = [];
-  let nextUrl: string | null = `https://api.spotify.com/v1/artists/${spotifyArtistId}/albums?include_groups=album,single,compilation&limit=50`;
+  // Use limit=10 because Spotify API returns HTTP 400 'Invalid limit' for values > 10 in standard developer tiers
+  let nextUrl: string | null = `https://api.spotify.com/v1/artists/${spotifyArtistId}/albums?include_groups=album,single,compilation&limit=10`;
   let pages = 0;
+  const maxPages = Math.ceil(maxAlbums / 10);
 
-  while (nextUrl && albums.length < maxAlbums && pages < 5) {
+  while (nextUrl && albums.length < maxAlbums && pages < maxPages) {
     pages++;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -170,7 +172,10 @@ export async function fetchSpotifyDiscography(
         signal: controller.signal,
       });
 
-      if (!res.ok) break;
+      if (!res.ok) {
+        console.warn(`[Spotify] Albums fetch page ${pages} failed with HTTP ${res.status}`);
+        break;
+      }
 
       const data: any = await res.json();
       const items = data.items || [];
@@ -205,6 +210,80 @@ export async function fetchSpotifyDiscography(
   }
 
   return albums;
+}
+
+/**
+ * Discovers an artist by name and fetches their complete discography from Spotify.
+ */
+export async function fetchSpotifyDiscographyByName(
+  artistName: string,
+  maxAlbums = 150
+): Promise<{ artist: NormalizedArtist | null; albums: NormalizedAlbum[] }> {
+  const artists = await searchSpotifyArtists(artistName, 1);
+  if (artists.length === 0) {
+    return { artist: null, albums: [] };
+  }
+
+  const artist = artists[0];
+  const albums = artist.providerId ? await fetchSpotifyDiscography(String(artist.providerId), maxAlbums) : [];
+  return { artist, albums };
+}
+
+/**
+ * Searches Spotify for albums matching a query.
+ */
+export async function searchSpotifyAlbums(query: string, limit = 5): Promise<NormalizedAlbum[]> {
+  const token = await getSpotifyAccessToken();
+  if (!token) return [];
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=${Math.min(limit, 10)}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const items = data.albums?.items || [];
+
+    return items.map((item: any) => {
+      const cover = item.images && item.images.length > 0 ? item.images[0].url : null;
+      const albumType = classifyAlbumType(item.name, item.album_type, item.total_tracks);
+      const slug = slugify(`${item.name}-${item.release_date?.slice(0, 4) || ''}`, {
+        lower: true,
+        strict: true,
+      });
+
+      return {
+        provider: 'spotify' as const,
+        providerId: item.id,
+        title: item.name,
+        slug: slug || `spotify-${item.id}`,
+        artistName: item.artists?.[0]?.name,
+        releaseDate: item.release_date || null,
+        albumType,
+        coverUrl: cover,
+        trackCount: item.total_tracks || 0,
+      };
+    });
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Fetches the official Spotify artist portrait image.
+ */
+export async function getSpotifyArtistPhoto(artistNameOrId: string): Promise<string | null> {
+  const artists = await searchSpotifyArtists(artistNameOrId, 1);
+  return artists[0]?.imageUrl || null;
 }
 
 /**
