@@ -192,66 +192,6 @@ export default async function AlbumDetailPage({ params }: AlbumPageProps) {
               .orderBy(asc(tracks.discNumber), asc(tracks.trackNumber), asc(tracks.id))
               .all();
           }
-        } else {
-          // Fallback legacy iTunes lookup
-          const itunesRes = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(`${album.artistName} ${album.title}`)}&entity=album&limit=1`,
-            { signal: AbortSignal.timeout(6000) }
-          );
-          if (itunesRes.ok) {
-            const itunesData = await itunesRes.json();
-            if (itunesData.results && itunesData.results[0]?.collectionId) {
-              const lookupRes = await fetch(
-                `https://itunes.apple.com/lookup?id=${itunesData.results[0].collectionId}&entity=song`,
-                { signal: AbortSignal.timeout(6000) }
-              );
-              if (lookupRes.ok) {
-                const lookupData = await lookupRes.json();
-                const songItems = lookupData.results.filter(
-                  (x: any) => x.wrapperType === 'track' && x.trackName
-                );
-                const now = Math.floor(Date.now() / 1000);
-                let totalRuntime = 0;
-                for (const s of songItems) {
-                  const trackSlug = slugify(`${s.trackName}-${s.trackNumber}`, { lower: true, strict: true }) || `track-${s.trackId}`;
-                  const durationSeconds = s.trackTimeMillis ? Math.round(s.trackTimeMillis / 1000) : 0;
-                  totalRuntime += durationSeconds;
-                  db.insert(tracks).values({
-                    title: s.trackName,
-                    slug: trackSlug,
-                    albumId: album.id,
-                    artistId: album.artistId,
-                    trackNumber: s.trackNumber || 1,
-                    discNumber: s.discNumber || 1,
-                    durationSeconds,
-                    explicit: s.trackExplicitness === 'explicit' ? 1 : 0,
-                    createdAt: now,
-                  }).onConflictDoNothing().run();
-                }
-                if (songItems.length > 0) {
-                  db.update(albums).set({
-                    trackCount: songItems.length,
-                    runtimeSeconds: totalRuntime > 0 ? totalRuntime : null,
-                  }).where(eq(albums.id, album.id)).run();
-
-                  trackList = db
-                    .select({
-                      id: tracks.id,
-                      title: tracks.title,
-                      slug: tracks.slug,
-                      trackNumber: tracks.trackNumber,
-                      discNumber: tracks.discNumber,
-                      durationSeconds: tracks.durationSeconds,
-                      explicit: tracks.explicit,
-                    })
-                    .from(tracks)
-                    .where(eq(tracks.albumId, album.id))
-                    .orderBy(asc(tracks.discNumber), asc(tracks.trackNumber), asc(tracks.id))
-                    .all();
-                }
-              }
-            }
-          }
         }
       } catch (err) {
         console.error('Error auto-populating album tracks:', err);

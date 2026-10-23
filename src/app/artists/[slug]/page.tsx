@@ -54,7 +54,7 @@ export default async function ArtistDetailPage({ params }: ArtistPageProps) {
     }
   }
 
-  // Ensure complete discography is populated
+  // Ensure complete discography is populated and purified via Spotify
   try {
     const existingCount = db
       .select({ count: sql<number>`count(*)` })
@@ -62,7 +62,18 @@ export default async function ArtistDetailPage({ params }: ArtistPageProps) {
       .where(eq(albums.artistId, artist.id))
       .get()?.count ?? 0;
 
-    if (artist.enrichmentStatus !== 'complete' || existingCount < 15) {
+    const hasLegacyThirdParty = db
+      .select({ id: albums.id })
+      .from(albums)
+      .where(
+        and(
+          eq(albums.artistId, artist.id),
+          sql`coverUrl LIKE '%dzcdn.net%' OR coverUrl LIKE '%mzstatic.com%' OR (coverUrl NOT LIKE '%scdn.co%' AND coverUrl IS NOT NULL)`
+        )
+      )
+      .get();
+
+    if (artist.enrichmentStatus !== 'complete' || existingCount < 10 || Boolean(hasLegacyThirdParty)) {
       await enrichArtistDiscographyUnified(artist.id, { forceRefresh: true });
     }
   } catch (err) {

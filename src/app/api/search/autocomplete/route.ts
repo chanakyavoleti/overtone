@@ -6,9 +6,7 @@ import {
   expandQueryAliases,
   calculateArtistMatchScore,
 } from '@/lib/metadata/normalization';
-import { searchDeezerArtists, isValidDeezerPhoto } from '@/lib/metadata/providers/deezer';
-import { searchITunesArtists } from '@/lib/metadata/providers/itunes';
-import { isSpotifyConfigured, searchSpotifyArtists } from '@/lib/metadata/providers/spotify';
+import { searchSpotifyArtists } from '@/lib/metadata/providers/spotify';
 import { VERIFIED_ARTIST_PHOTOS } from '@/lib/db/discographyService';
 
 export async function GET(request: NextRequest) {
@@ -86,34 +84,16 @@ export async function GET(request: NextRequest) {
     matched.sort((a, b) => b.matchScore - a.matchScore);
 
     // 2. If fewer than 3 high-confidence local matches and query is at least 3 characters,
-    // query external providers with a fast timeout (1500ms) to ensure autocomplete stays fast.
+    // query Spotify with a fast timeout (1500ms) to ensure autocomplete stays fast.
     if (matched.length < 3 && query.length >= 3) {
       try {
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Autocomplete external timeout')), 1500)
         );
 
-        let externalCandidates: any[] = [];
-
-        if (isSpotifyConfigured()) {
-          // Spotify-exclusive provider
-          const spotifyFetch = searchSpotifyArtists(query, 5);
-          externalCandidates = await Promise.race([spotifyFetch, timeoutPromise]);
-        } else {
-          // Fallback legacy providers
-          const externalFetch = Promise.allSettled([
-            searchITunesArtists(query, 5),
-            searchDeezerArtists(query, 5),
-          ]);
-
-          const [itunesRes, deezerRes] = (await Promise.race([externalFetch, timeoutPromise])) as [
-            PromiseSettledResult<any[]>,
-            PromiseSettledResult<any[]>
-          ];
-
-          if (itunesRes.status === 'fulfilled') externalCandidates.push(...itunesRes.value);
-          if (deezerRes.status === 'fulfilled') externalCandidates.push(...deezerRes.value);
-        }
+        // Spotify is the sole external data provider
+        const spotifyFetch = searchSpotifyArtists(query, 5);
+        const externalCandidates = await Promise.race([spotifyFetch, timeoutPromise]);
 
         for (const ext of externalCandidates) {
           const score = calculateArtistMatchScore(query, ext.name, ext.aliases || []);
@@ -133,7 +113,7 @@ export async function GET(request: NextRequest) {
                 id: -1, // Unimported external result
                 name: ext.name,
                 slug: ext.slug,
-                imageUrl: photo,
+                imageUrl: photo || null,
                 country: ext.country || null,
                 matchScore: score,
                 isLocal: false,

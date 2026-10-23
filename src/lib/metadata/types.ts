@@ -1,7 +1,7 @@
 export type ReleaseType = 'album' | 'ep' | 'single' | 'compilation' | 'soundtrack';
 
 export interface NormalizedArtist {
-  provider: 'local' | 'itunes' | 'deezer' | 'musicbrainz' | 'spotify';
+  provider: 'spotify' | 'local';
   providerId?: string | number;
   name: string;
   slug: string;
@@ -16,7 +16,7 @@ export interface NormalizedArtist {
 }
 
 export interface NormalizedAlbum {
-  provider: 'itunes' | 'deezer' | 'musicbrainz' | 'spotify' | 'local';
+  provider: 'spotify' | 'local';
   providerId?: string | number;
   title: string;
   slug: string;

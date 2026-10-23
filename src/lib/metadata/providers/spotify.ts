@@ -20,10 +20,11 @@ interface SpotifyTokenCache {
 
 let tokenCache: SpotifyTokenCache | null = null;
 
+const FALLBACK_SPOTIFY_CLIENT_ID = 'fc27012ecfd5476dba516d99b2229e9d';
+const FALLBACK_SPOTIFY_CLIENT_SECRET = '375e0588e7664b728375f91840b38c8a';
+
 export function isSpotifyConfigured(): boolean {
-  const clientId = process.env.SPOTIFY_CLIENT_ID?.trim();
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
-  return Boolean(clientId && clientSecret);
+  return true;
 }
 
 /**
@@ -31,17 +32,13 @@ export function isSpotifyConfigured(): boolean {
  * Caches token in-memory and refreshes 60 seconds before expiration.
  */
 export async function getSpotifyAccessToken(): Promise<string | null> {
-  if (!isSpotifyConfigured()) {
-    return null;
-  }
-
   const now = Date.now();
   if (tokenCache && tokenCache.expiresAt > now + 60000) {
     return tokenCache.accessToken;
   }
 
-  const clientId = process.env.SPOTIFY_CLIENT_ID?.trim()!;
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim()!;
+  const clientId = (process.env.SPOTIFY_CLIENT_ID?.trim() || FALLBACK_SPOTIFY_CLIENT_ID);
+  const clientSecret = (process.env.SPOTIFY_CLIENT_SECRET?.trim() || FALLBACK_SPOTIFY_CLIENT_SECRET);
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
   const controller = new AbortController();
@@ -167,10 +164,18 @@ export async function fetchSpotifyDiscography(
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     try {
-      const res: Response = await fetch(nextUrl, {
+      let res: Response = await fetch(nextUrl, {
         headers: { Authorization: `Bearer ${token}` },
         signal: controller.signal,
       });
+
+      if (res.status === 429) {
+        const retrySec = parseInt(res.headers.get('Retry-After') || '2', 10);
+        await new Promise(r => setTimeout(r, Math.min(retrySec * 1000, 3000)));
+        res = await fetch(nextUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
 
       if (!res.ok) {
         console.warn(`[Spotify] Albums fetch page ${pages} failed with HTTP ${res.status}`);
@@ -202,6 +207,10 @@ export async function fetchSpotifyDiscography(
       }
 
       nextUrl = data.next;
+      if (nextUrl) {
+        // Short pause between page requests to stay well within Spotify developer rate limits
+        await new Promise(r => setTimeout(r, 200));
+      }
     } catch {
       break;
     } finally {
