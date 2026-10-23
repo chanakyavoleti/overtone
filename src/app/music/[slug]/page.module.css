@@ -1,0 +1,368 @@
+.page {
+  min-height: 100vh;
+  padding-bottom: var(--space-16);
+}
+
+.header {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: var(--space-8);
+  padding: var(--space-10) 0;
+  align-items: start;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.artworkContainer {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  background: var(--color-bg-recessed);
+}
+
+.artwork {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.artworkFallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-recessed);
+  color: var(--color-text-tertiary);
+}
+
+.artworkFallbackIcon {
+  opacity: 0.3;
+}
+
+.infoArea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.typeBadgeRow {
+  display: flex;
+}
+
+.typeBadge {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wider);
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+  font-weight: 400;
+}
+
+.artistRow {
+  margin-top: -2px;
+}
+
+.artistLink {
+  font-size: var(--text-xl);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.artistLink:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.artistName {
+  font-size: var(--text-xl);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-1);
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.genresRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.genrePill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px var(--space-3);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.genrePill:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.ratingsWrapper {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-bg-recessed);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+.aggregateRating {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ratingHeading {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-secondary);
+}
+
+.userRatingContainer {
+  flex: 1;
+  min-width: 220px;
+}
+
+.guestRatingPrompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.guestPromptLabel {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-secondary);
+}
+
+.guestRatingLink {
+  font-size: var(--text-sm);
+  color: var(--color-accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.guestRatingLink:hover {
+  text-decoration: underline;
+}
+
+/* Tracklist Section */
+.tracklistSection {
+  margin-top: var(--space-10);
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-4);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  color: var(--color-text);
+  font-weight: 400;
+}
+
+.sectionSubtext {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-elevated);
+}
+
+.trackTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: var(--text-sm);
+}
+
+.trackTable thead {
+  background: var(--color-bg-recessed);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.thNum {
+  width: 52px;
+  padding: var(--space-3) var(--space-4);
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.thTitle {
+  padding: var(--space-3) var(--space-4);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.thDuration {
+  width: 90px;
+  padding: var(--space-3) var(--space-4);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+.trackRow {
+  border-bottom: 1px solid var(--color-border-subtle);
+  transition: background-color var(--transition-fast);
+}
+
+.trackRow:last-child {
+  border-bottom: none;
+}
+
+.trackRow:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.tdNum {
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tdTitle {
+  padding: var(--space-3) var(--space-4);
+}
+
+.trackTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trackTitleText {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.explicitBadge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  background: var(--color-border-strong);
+  color: var(--color-bg);
+  border-radius: var(--radius-xs);
+  line-height: 1;
+}
+
+.tdDuration {
+  padding: var(--space-3) var(--space-4);
+  text-align: right;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.noTracks {
+  padding: var(--space-6) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Other Albums Section */
+.otherAlbumsSection {
+  margin-top: var(--space-12);
+  padding-top: var(--space-10);
+  border-top: 1px solid var(--color-border);
+}
+
+.seeArtistLink {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.seeArtistLink:hover {
+  color: var(--color-accent);
+}
+
+@media (max-width: 768px) {
+  .header {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+    text-align: center;
+  }
+
+  .artworkContainer {
+    margin: 0 auto;
+    max-width: 240px;
+  }
+
+  .metaRow,
+  .genresRow {
+    justify-content: center;
+  }
+
+  .typeBadgeRow {
+    justify-content: center;
+  }
+
+  .ratingsWrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+
+  .aggregateRating {
+    align-items: center;
+  }
+}
