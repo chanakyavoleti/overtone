@@ -355,6 +355,7 @@ export function classifyAlbumType(
   const rawLower = (rawType || '').toLowerCase();
 
   if (
+    /\b(soundtrack|ost|motion picture|original score|score from|music from)\b/i.test(lower) ||
     lower.includes('soundtrack') ||
     lower.includes('original motion picture') ||
     lower.includes('from "') ||

@@ -145,7 +145,8 @@ export async function searchSpotifyArtists(
  */
 export async function fetchSpotifyDiscography(
   spotifyArtistId: string,
-  maxAlbums = 150
+  maxAlbums = 150,
+  artistName?: string
 ): Promise<NormalizedAlbum[]> {
   const token = await getSpotifyAccessToken();
   if (!token) {
@@ -154,7 +155,7 @@ export async function fetchSpotifyDiscography(
 
   const albums: NormalizedAlbum[] = [];
   // Use limit=10 because Spotify API returns HTTP 400 'Invalid limit' for values > 10 in standard developer tiers
-  let nextUrl: string | null = `https://api.spotify.com/v1/artists/${spotifyArtistId}/albums?include_groups=album,single,compilation&limit=10`;
+  let nextUrl: string | null = `https://api.spotify.com/v1/artists/${spotifyArtistId}/albums?include_groups=album,single,compilation,appears_on&limit=10`;
   let pages = 0;
   const maxPages = Math.ceil(maxAlbums / 10);
 
@@ -215,6 +216,80 @@ export async function fetchSpotifyDiscography(
       break;
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+  // If albums endpoint was rate-limited (HTTP 429) or returned 0 releases,
+  // execute resilient fallback via Spotify search API
+  if (albums.length === 0) {
+    let resolvedName = artistName;
+    if (!resolvedName) {
+      try {
+        const aRes = await fetch(`https://api.spotify.com/v1/artists/${spotifyArtistId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (aRes.ok) {
+          const aData = await aRes.json();
+          resolvedName = aData.name;
+        }
+      } catch {
+        // Ignore failure
+      }
+    }
+
+    if (resolvedName) {
+      console.log(`[Spotify] Albums endpoint rate-limited or empty. Executing search fallback for "${resolvedName}"...`);
+      const seenIds = new Set<string>();
+      const searchMax = Math.min(maxAlbums, 50);
+
+      for (let offset = 0; offset < searchMax && albums.length < maxAlbums; offset += 10) {
+        try {
+          const sUrl = `https://api.spotify.com/v1/search?q=artist:%22${encodeURIComponent(resolvedName)}%22&type=album&limit=10&offset=${offset}`;
+          const sRes = await fetch(sUrl, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (!sRes.ok) break;
+
+          const sData = await sRes.json();
+          const sItems = sData.albums?.items || [];
+          if (sItems.length === 0) break;
+
+          for (const item of sItems) {
+            if (seenIds.has(item.id)) continue;
+            seenIds.add(item.id);
+
+            // Verify artist credit matches
+            const isCredited = item.artists?.some(
+              (a: any) => a.id === spotifyArtistId || a.name?.toLowerCase() === resolvedName!.toLowerCase()
+            );
+            if (!isCredited) continue;
+
+            const cover = item.images && item.images.length > 0 ? item.images[0].url : null;
+            const albumType = classifyAlbumType(item.name, item.album_type, item.total_tracks);
+            const slug = slugify(`${item.name}-${item.release_date?.slice(0, 4) || ''}`, {
+              lower: true,
+              strict: true,
+            });
+
+            albums.push({
+              provider: 'spotify',
+              providerId: item.id,
+              title: item.name,
+              slug: slug || `spotify-${item.id}`,
+              artistName: item.artists?.[0]?.name,
+              releaseDate: item.release_date || null,
+              albumType,
+              coverUrl: cover,
+              trackCount: item.total_tracks || 0,
+            });
+          }
+
+          await new Promise(r => setTimeout(r, 200));
+        } catch {
+          break;
+        }
+      }
     }
   }
 

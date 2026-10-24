@@ -59,7 +59,7 @@ export default async function ArtistDetailPage({ params }: ArtistPageProps) {
     const existingCount = db
       .select({ count: sql<number>`count(*)` })
       .from(albums)
-      .where(eq(albums.artistId, artist.id))
+      .where(sql`albums.artistId = ${artist.id} OR EXISTS (SELECT 1 FROM album_artists aa WHERE aa.albumId = albums.id AND aa.artistId = ${artist.id})`)
       .get()?.count ?? 0;
 
     if (existingCount < 5 && artist.enrichmentStatus !== 'complete') {
@@ -128,7 +128,7 @@ export default async function ArtistDetailPage({ params }: ArtistPageProps) {
       COUNT(r.id) as ratingCount
     FROM albums a
     LEFT JOIN ratings r ON r.targetType = 'album' AND r.targetId = a.id
-    WHERE a.artistId = ${artist.id}
+    WHERE (a.artistId = ${artist.id} OR EXISTS (SELECT 1 FROM album_artists aa WHERE aa.albumId = a.id AND aa.artistId = ${artist.id}))
     GROUP BY a.id
     ORDER BY a.releaseDate DESC, a.title ASC
   `) as Array<{

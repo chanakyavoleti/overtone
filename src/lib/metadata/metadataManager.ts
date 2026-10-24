@@ -309,7 +309,7 @@ export async function enrichArtistDiscographyUnified(
 
       // Fetch official Spotify discography (albums, singles, compilations)
       if (spArtist.providerId) {
-        const spAlbums = await fetchSpotifyDiscography(String(spArtist.providerId), 150);
+        const spAlbums = await fetchSpotifyDiscography(String(spArtist.providerId), 150, artist.name);
         pagesProcessed += Math.max(1, Math.ceil(spAlbums.length / 10));
         discoveredReleases.push(...spAlbums);
       }
@@ -319,7 +319,7 @@ export async function enrichArtistDiscographyUnified(
         try {
           const vulturesArtist = await searchSpotifyArtists('¥$', 1);
           if (vulturesArtist.length > 0 && vulturesArtist[0].providerId) {
-            const vulturesAlbums = await fetchSpotifyDiscography(String(vulturesArtist[0].providerId), 20);
+            const vulturesAlbums = await fetchSpotifyDiscography(String(vulturesArtist[0].providerId), 20, "¥$");
             discoveredReleases.push(...vulturesAlbums);
           }
         } catch {
@@ -431,6 +431,10 @@ export async function enrichArtistDiscographyUnified(
       }
     } else {
       currentAlbumId = existingRecord.id;
+      db.insert(albumArtists)
+        .values({ albumId: currentAlbumId, artistId, role: 'primary' })
+        .onConflictDoNothing()
+        .run();
       // Protect and upgrade artwork
       if (!existingRecord.coverUrl && finalCover) {
         db.update(albums).set({ coverUrl: finalCover }).where(eq(albums.id, currentAlbumId)).run();
@@ -562,6 +566,7 @@ export async function getOrImportArtistBySlug(slug: string): Promise<any | null>
         imageUrl: bestPhoto,
         country: best.country || null,
         aliases: best.aliases ? JSON.stringify(best.aliases) : null,
+        providerIds: JSON.stringify({ spotify: best.providerId }),
         enrichmentStatus: 'pending',
         createdAt: now,
       })
