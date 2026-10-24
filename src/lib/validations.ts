@@ -101,3 +101,27 @@ export const listSchema = z.object({
 });
 
 export type ListInput = z.infer<typeof listSchema>;
+
+// ============================================================================
+// Password Reset Schemas
+// ============================================================================
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email('Please enter a valid email address')
+    .toLowerCase(),
+});
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters long'),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

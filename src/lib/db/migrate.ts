@@ -241,6 +241,18 @@ export function runMigrations(targetDb = db): void {
     );
   `);
 
+  // 21. password_reset_tokens
+  targetDb.run(sql`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL REFERENCES users(id),
+      tokenHash TEXT NOT NULL,
+      expiresAt INTEGER NOT NULL,
+      usedAt INTEGER,
+      createdAt INTEGER
+    );
+  `);
+
   // Indexes
   targetDb.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS ratings_userId_targetType_targetId_idx ON ratings (userId, targetType, targetId);`);
   targetDb.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS review_votes_userId_reviewId_idx ON review_votes (userId, reviewId);`);
@@ -256,6 +268,8 @@ export function runMigrations(targetDb = db): void {
   targetDb.run(sql`CREATE INDEX IF NOT EXISTS idx_reviews_userId ON reviews (userId);`);
   targetDb.run(sql`CREATE INDEX IF NOT EXISTS idx_lists_userId ON lists (userId);`);
   targetDb.run(sql`CREATE INDEX IF NOT EXISTS idx_list_items_listId ON list_items (listId);`);
+  targetDb.run(sql`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_tokenHash ON password_reset_tokens (tokenHash);`);
+  targetDb.run(sql`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_userId ON password_reset_tokens (userId);`);
 
   // Safe non-destructive column additions
   try {

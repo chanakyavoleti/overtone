@@ -92,6 +92,18 @@
   padding: var(--space-1) 0;
 }
 
+@media (max-width: 640px) {
+  .dropdown {
+    position: fixed;
+    top: 56px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 70vh;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  }
+}
+
 .suggestionItem {
   display: flex;
   align-items: center;

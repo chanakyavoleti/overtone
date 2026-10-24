@@ -366,3 +366,23 @@
     align-items: center;
   }
 }
+
+@media (max-width: 480px) {
+  .thNum, .tdNum {
+    width: 36px;
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--text-xs);
+  }
+  .thTitle, .tdTitle {
+    padding: var(--space-2) var(--space-2);
+  }
+  .thDuration, .tdDuration {
+    width: 60px;
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--text-xs);
+  }
+  .trackTitleText {
+    font-size: var(--text-sm);
+    word-break: break-word;
+  }
+}

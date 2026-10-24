@@ -18,6 +18,18 @@ export const users = sqliteTable('users', {
 });
 
 // ---------------------------------------------------------------------------
+// 1b. Password Reset Tokens Table
+// ---------------------------------------------------------------------------
+export const passwordResetTokens = sqliteTable('password_reset_tokens', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('userId').notNull().references(() => users.id),
+  tokenHash: text('tokenHash').notNull(),
+  expiresAt: integer('expiresAt').notNull(),
+  usedAt: integer('usedAt'),
+  createdAt: integer('createdAt').notNull(),
+});
+
+// ---------------------------------------------------------------------------
 // 2. Artists Table
 // ---------------------------------------------------------------------------
 export const artists = sqliteTable('artists', {

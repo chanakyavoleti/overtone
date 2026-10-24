@@ -2,11 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
+import { checkRateLimit } from '@/lib/auth/rateLimit';
 import bcrypt from 'bcryptjs';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
   try {
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      'unknown';
+
+    const rateLimit = checkRateLimit(`register:${ip}`, {
+      maxRequests: 6,
+      windowMs: 60_000,
+    });
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: `Too many registration attempts. Please wait ${rateLimit.resetInSeconds} seconds before trying again.`,
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { username, email, password } = body;
 
@@ -18,9 +38,9 @@ export async function POST(request: NextRequest) {
     }
 
     const trimmedUsername = typeof username === 'string' ? username.trim() : '';
-    const trimmedEmail = typeof email === 'string' ? email.trim() : '';
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
-    // Validate username: 3-30 chars, /^[a-zA-Z0-9_]+$/
+    // Validate username: 3-30 chars, letters, numbers, underscores
     if (
       trimmedUsername.length < 3 ||
       trimmedUsername.length > 30 ||
@@ -34,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
+    if (!emailRegex.test(normalizedEmail)) {
       return NextResponse.json(
         { error: 'Please enter a valid email address' },
         { status: 400 }
@@ -49,33 +69,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check uniqueness (username and email) using sync better-sqlite3 access
-    const existingUser = db.select().from(users).where(eq(users.username, trimmedUsername)).get();
-    if (existingUser) {
+    // Check uniqueness (username and email)
+    const existing = db
+      .select({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+      })
+      .from(users)
+      .where(
+        or(
+          eq(users.username, trimmedUsername),
+          eq(users.email, normalizedEmail)
+        )
+      )
+      .get();
+
+    if (existing) {
+      if (existing.username.toLowerCase() === trimmedUsername.toLowerCase()) {
+        return NextResponse.json(
+          { error: 'Username is already taken' },
+          { status: 400 }
+        );
+      }
+      if (existing.email.toLowerCase() === normalizedEmail) {
+        return NextResponse.json(
+          { error: 'Email is already registered' },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
-        { error: 'Username is already taken' },
+        { error: 'An account with these details already exists' },
         { status: 400 }
       );
     }
 
-    const existingEmail = db.select().from(users).where(eq(users.email, trimmedEmail)).get();
-    if (existingEmail) {
-      return NextResponse.json(
-        { error: 'Email is already registered' },
-        { status: 400 }
-      );
-    }
-
-    // Hash with bcrypt.hashSync(password, 12)
-    const passwordHash = bcrypt.hashSync(password, 12);
+    // Asynchronously hash password with bcrypt (12 rounds)
+    const saltRounds = 12;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
     const now = Math.floor(Date.now() / 1000);
 
-    // Insert user with role 'user', createdAt: Math.floor(Date.now() / 1000)
     const newUser = db
       .insert(users)
       .values({
         username: trimmedUsername,
-        email: trimmedEmail,
+        email: normalizedEmail,
         passwordHash,
         displayName: trimmedUsername,
         role: 'user',
@@ -115,7 +153,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Registration error:', error);
     return NextResponse.json(
-      { error: 'Registration failed' },
+      { error: 'Registration failed. Please try again.' },
       { status: 500 }
     );
   }

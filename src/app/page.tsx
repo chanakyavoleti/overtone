@@ -48,29 +48,6 @@ export default async function HomePage() {
     console.error('Failed to query top rated albums:', err);
   }
 
-  // Recently added
-  let recentAlbums: any[] = [];
-  try {
-    recentAlbums = db
-      .select({
-        id: albums.id,
-        title: albums.title,
-        slug: albums.slug,
-        coverUrl: albums.coverUrl,
-        releaseDate: albums.releaseDate,
-        albumType: albums.albumType,
-        artistId: albums.artistId,
-        artistName: artists.name,
-      })
-      .from(albums)
-      .leftJoin(artists, eq(albums.artistId, artists.id))
-      .orderBy(desc(albums.createdAt))
-      .limit(10)
-      .all();
-  } catch (err) {
-    console.error('Failed to query recent albums:', err);
-  }
-
   // Genres
   let allGenres: any[] = [];
   try {
@@ -139,31 +116,6 @@ export default async function HomePage() {
           </section>
         )}
 
-        {/* Recently Added */}
-        {recentAlbums.length > 0 && (
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Recently Added</h2>
-              <Link href="/music" className={styles.seeAll}>
-                Browse all &rarr;
-              </Link>
-            </div>
-            <AlbumGrid columns={5}>
-              {recentAlbums.map((album) => (
-                <AlbumCard
-                  key={album.id}
-                  slug={album.slug}
-                  title={album.title}
-                  artistName={album.artistName || 'Unknown Artist'}
-                  coverUrl={album.coverUrl}
-                  releaseDate={album.releaseDate}
-                  albumType={album.albumType}
-                />
-              ))}
-            </AlbumGrid>
-          </section>
-        )}
-
         {/* Genres */}
         {allGenres.length > 0 && (
           <section className={styles.section}>
@@ -185,7 +137,7 @@ export default async function HomePage() {
         )}
 
         {/* Empty state */}
-        {topAlbums.length === 0 && recentAlbums.length === 0 && (
+        {topAlbums.length === 0 && (
           <section className={styles.emptyState}>
             <h2 className={styles.emptyTitle}>Welcome to Overtone</h2>
             <p className={styles.emptyText}>

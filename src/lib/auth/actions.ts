@@ -40,7 +40,7 @@ export async function registerUser(
 
     const validationResult = registerSchema.safeParse({
       username: typeof rawUsername === 'string' ? rawUsername.trim() : rawUsername,
-      email: typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail,
+      email: typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail,
       password: rawPassword,
     });
 
@@ -141,7 +141,7 @@ export async function loginUser(
     const rawPassword = formData instanceof FormData ? formData.get('password') : formData.password;
 
     const validationResult = loginSchema.safeParse({
-      email: typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail,
+      email: typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail,
       password: rawPassword,
     });
 

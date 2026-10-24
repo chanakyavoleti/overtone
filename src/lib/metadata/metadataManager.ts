@@ -18,6 +18,7 @@ import {
   normalizeAlbumTitle,
   classifyAlbumType,
   KNOWN_ARTIST_ALIASES,
+  resolveCanonicalSlug,
 } from './normalization';
 import {
   isSpotifyConfigured,
@@ -557,14 +558,19 @@ export async function getOrImportArtistBySlug(slug: string): Promise<any | null>
   const cleanSlug = slug.trim();
   if (!cleanSlug) return null;
 
-  // 1. Check local catalog
-  const existing = db.select().from(artists).where(eq(artists.slug, cleanSlug)).get();
+  const canonicalSlug = resolveCanonicalSlug(cleanSlug);
+
+  // 1. Check local catalog by canonical slug, then by provided slug
+  let existing = db.select().from(artists).where(eq(artists.slug, canonicalSlug)).get();
+  if (!existing && canonicalSlug !== cleanSlug) {
+    existing = db.select().from(artists).where(eq(artists.slug, cleanSlug)).get();
+  }
   if (existing) {
     return existing;
   }
 
   // 2. Query Spotify exclusively
-  const queryName = cleanSlug.replace(/-/g, ' ');
+  const queryName = canonicalSlug.replace(/-/g, ' ');
   const candidates: NormalizedArtist[] = await searchSpotifyArtists(queryName, 5).catch(() => []);
 
   if (candidates.length === 0) {

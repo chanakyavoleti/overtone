@@ -23,6 +23,24 @@
   }
 }
 
+@media (max-width: 480px) {
+  .headerInner {
+    padding: 0 var(--space-3);
+    gap: var(--space-2);
+  }
+  .logo {
+    font-size: var(--text-lg);
+  }
+  .authLink {
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-xs);
+  }
+  .signUpBtn {
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-xs);
+  }
+}
+
 .logo {
   font-family: var(--font-display);
   font-size: var(--text-xl);
@@ -30,11 +48,18 @@
   text-decoration: none;
   letter-spacing: var(--tracking-tight);
   flex-shrink: 0;
-  transition: color var(--transition-fast);
+  transition: opacity var(--transition-fast);
 }
 
 .logo:hover {
-  color: var(--color-accent);
+  color: var(--color-text);
+  opacity: 0.88;
+}
+
+.logo:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .logoAccent {

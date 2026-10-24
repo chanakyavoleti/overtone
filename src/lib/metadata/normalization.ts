@@ -63,6 +63,77 @@ export const KNOWN_ARTIST_ALIASES: Record<string, string[]> = {
   'charan-raj': ['Charan Raj'],
 };
 
+// Canonical slug mappings to merge duplicate aliases and spellings to authoritative profiles
+export const CANONICAL_SLUG_MAP: Record<string, string> = {
+  // Telugu
+  'dsp': 'devi-sri-prasad',
+  'devisri-prasad': 'devi-sri-prasad',
+  'devi-sriprasad': 'devi-sri-prasad',
+  'devi-shree-prasad': 'devi-sri-prasad',
+  'spb': 's-p-balasubrahmanyam',
+  'sp-balasubrahmanyam': 's-p-balasubrahmanyam',
+  's-p-balasubramaniam': 's-p-balasubrahmanyam',
+  'sp-balasubramaniam': 's-p-balasubrahmanyam',
+  'bala-subramanyam': 's-p-balasubrahmanyam',
+  'mm-keeravaani': 'mm-keeravani',
+  'm-m-keeravani': 'mm-keeravani',
+  'm-m-keeravaani': 'mm-keeravani',
+  'keeravani': 'mm-keeravani',
+  'thaman-s': 'thaman',
+  's-thaman': 'thaman',
+  'ss-thaman': 'thaman',
+
+  // Tamil
+  'ar-rahman': 'a-r-rahman',
+  'a-r-rehman': 'a-r-rahman',
+  'ar-rehman': 'a-r-rahman',
+  'rahman': 'a-r-rahman',
+  'anirudh': 'anirudh-ravichander',
+  'ani': 'anirudh-ravichander',
+  'ilayaraja': 'ilaiyaraaja',
+  'illayaraja': 'ilaiyaraaja',
+  'illaiyaraja': 'ilaiyaraaja',
+  'yuvan': 'yuvan-shankar-raja',
+  'sana': 'santhosh-narayanan',
+  'imman': 'd-imman',
+
+  // Hindi / Bollywood
+  'arijit': 'arijit-singh',
+  'arjit-singh': 'arijit-singh',
+  'arjith-singh': 'arijit-singh',
+  'shreya': 'shreya-ghoshal',
+  'shreya-goshal': 'shreya-ghoshal',
+  'shreya-ghosal': 'shreya-ghoshal',
+  'sonu': 'sonu-nigam',
+  'sunidhi': 'sunidhi-chauhan',
+  'kishore': 'kishore-kumar',
+  'lata': 'lata-mangeshkar',
+
+  // Malayalam
+  'kj-yesudas': 'k-j-yesudas',
+  'yesudas': 'k-j-yesudas',
+  'ks-chitra': 'ks-chithra',
+  'k-s-chitra': 'ks-chithra',
+  'k-s-chithra': 'ks-chithra',
+  'chitra': 'ks-chithra',
+  'chithra': 'ks-chithra',
+};
+
+/**
+ * Resolves any alias, acronym, or alternate spelling slug into the canonical artist slug.
+ */
+export function resolveCanonicalSlug(slugOrAlias: string): string {
+  const clean = (slugOrAlias || '').trim().toLowerCase();
+  if (CANONICAL_SLUG_MAP[clean]) {
+    return CANONICAL_SLUG_MAP[clean];
+  }
+  const cleanDash = clean.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (CANONICAL_SLUG_MAP[cleanDash]) {
+    return CANONICAL_SLUG_MAP[cleanDash];
+  }
+  return cleanDash;
+}
+
 /**
  * Normalizes search text by trimming, lowercasing, converting Unicode
  * accents/diacritics, and collapsing spaces and special punctuation.

@@ -63,36 +63,7 @@ export default async function DiscoverPage() {
     ratingCount: number;
   }>;
 
-  // 3. Recently Added Albums
-  const recentlyAddedAlbums = db.all(sql`
-    SELECT 
-      a.id,
-      a.title,
-      a.slug,
-      a.coverUrl,
-      a.releaseDate,
-      a.albumType,
-      ar.name as artistName,
-      AVG(r.score) as avgRating,
-      COUNT(r.id) as ratingCount
-    FROM albums a
-    LEFT JOIN artists ar ON a.artistId = ar.id
-    LEFT JOIN ratings r ON r.targetType = 'album' AND r.targetId = a.id
-    GROUP BY a.id
-    ORDER BY a.createdAt DESC, a.id DESC LIMIT 10
-  `) as Array<{
-    id: number;
-    title: string;
-    slug: string;
-    coverUrl: string | null;
-    releaseDate: string | null;
-    albumType: string;
-    artistName: string | null;
-    avgRating: number | null;
-    ratingCount: number;
-  }>;
-
-  // 4. Genres Exploration
+  // 3. Genres Exploration
   const genresList = db.all(sql`
     SELECT 
       g.id,
@@ -235,44 +206,7 @@ export default async function DiscoverPage() {
           )}
         </section>
 
-        {/* 2. Recently Added Albums */}
-        <section className={styles.section} aria-labelledby="recent-heading">
-          <div className={styles.sectionHeader}>
-            <div className={styles.sectionTitleArea}>
-              <h2 id="recent-heading" className={styles.sectionTitle}>
-                Recently Added
-              </h2>
-              <p className={styles.sectionDescription}>
-                Fresh additions to the Overtone catalog.
-              </p>
-            </div>
-          </div>
-
-          {recentlyAddedAlbums.length === 0 ? (
-            <div className={styles.emptyCard}>
-              <Disc3 size={32} className={styles.emptyIcon} aria-hidden="true" />
-              <p>No albums cataloged yet.</p>
-            </div>
-          ) : (
-            <AlbumGrid columns={5}>
-              {recentlyAddedAlbums.map((album) => (
-                <AlbumCard
-                  key={album.id}
-                  slug={album.slug}
-                  title={album.title}
-                  artistName={album.artistName || 'Unknown Artist'}
-                  coverUrl={album.coverUrl}
-                  releaseDate={album.releaseDate}
-                  albumType={album.albumType}
-                  avgRating={album.avgRating !== null ? Number(album.avgRating) : null}
-                  ratingCount={Number(album.ratingCount || 0)}
-                />
-              ))}
-            </AlbumGrid>
-          )}
-        </section>
-
-        {/* 3. Genre Exploration */}
+        {/* 2. Genre Exploration */}
         <section className={styles.section} aria-labelledby="genres-heading">
           <div className={styles.sectionHeader}>
             <div className={styles.sectionTitleArea}>
