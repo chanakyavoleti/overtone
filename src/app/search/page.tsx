@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Disc3, Mic2, Music, User as UserIcon, Loader2 } from 'lucide-react';
+import { Search, Disc3, Mic2, Music, User as UserIcon, Clapperboard, Loader2 } from 'lucide-react';
 import AlbumCard, { AlbumGrid } from '@/components/music/AlbumCard';
 import SafeImage from '@/components/ui/SafeImage';
 import styles from './page.module.css';
 
 interface AlbumResult {
-  id: number;
+  id: number | string;
   title: string;
   slug: string;
   coverUrl: string | null;
@@ -20,7 +20,7 @@ interface AlbumResult {
 }
 
 interface ArtistResult {
-  id: number;
+  id: number | string;
   name: string;
   slug: string;
   imageUrl: string | null;
@@ -28,14 +28,16 @@ interface ArtistResult {
 }
 
 interface TrackResult {
-  id: number;
+  id: number | string;
   title: string;
   slug: string;
-  albumId: number;
-  artistId: number;
+  durationSeconds?: number | null;
+  albumId: number | string;
+  artistId: number | string;
   artistName: string | null;
   albumTitle: string | null;
   albumSlug: string | null;
+  coverUrl?: string | null;
 }
 
 interface UserResult {
@@ -46,13 +48,15 @@ interface UserResult {
 }
 
 interface SearchResults {
-  albums: AlbumResult[];
   artists: ArtistResult[];
+  albums: AlbumResult[];
+  soundtracks: AlbumResult[];
+  eps: AlbumResult[];
   tracks: TrackResult[];
   users: UserResult[];
 }
 
-type TabType = 'all' | 'albums' | 'artists' | 'tracks' | 'users';
+type TabType = 'all' | 'artists' | 'albums' | 'soundtracks' | 'eps' | 'tracks' | 'users';
 
 function SearchContent() {
   const router = useRouter();
@@ -65,8 +69,10 @@ function SearchContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResults>({
-    albums: [],
     artists: [],
+    albums: [],
+    soundtracks: [],
+    eps: [],
     tracks: [],
     users: [],
   });
@@ -75,7 +81,7 @@ function SearchContent() {
 
   const performSearch = useCallback(async (q: string, type: TabType) => {
     if (!q.trim()) {
-      setResults({ albums: [], artists: [], tracks: [], users: [] });
+      setResults({ artists: [], albums: [], soundtracks: [], eps: [], tracks: [], users: [] });
       setLoading(false);
       return;
     }
@@ -97,7 +103,7 @@ function SearchContent() {
         throw new Error('Search request failed');
       }
       const data = await res.json();
-      setResults(data.results || { albums: [], artists: [], tracks: [], users: [] });
+      setResults(data.results || { artists: [], albums: [], soundtracks: [], eps: [], tracks: [], users: [] });
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         setError('An error occurred while searching. Please try again.');
@@ -119,12 +125,12 @@ function SearchContent() {
   // Live search debounce when user types
   useEffect(() => {
     if (!inputVal.trim()) {
-      setResults({ albums: [], artists: [], tracks: [], users: [] });
+      setResults({ artists: [], albums: [], soundtracks: [], eps: [], tracks: [], users: [] });
       return;
     }
     const timer = setTimeout(() => {
       performSearch(inputVal, activeTab);
-    }, 250);
+    }, 220);
     return () => clearTimeout(timer);
   }, [inputVal, activeTab, performSearch]);
 
@@ -144,8 +150,10 @@ function SearchContent() {
   };
 
   const totalCount =
-    results.albums.length +
     results.artists.length +
+    results.albums.length +
+    results.soundtracks.length +
+    results.eps.length +
     results.tracks.length +
     results.users.length;
 
@@ -161,7 +169,7 @@ function SearchContent() {
               <input
                 type="text"
                 className={styles.searchInput}
-                placeholder="Search albums, artists, tracks, or members..."
+                placeholder="Search artists, albums, soundtracks, EPs, tracks..."
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
                 autoFocus
@@ -189,6 +197,15 @@ function SearchContent() {
               <button
                 type="button"
                 role="tab"
+                aria-selected={activeTab === 'artists'}
+                className={`${styles.tab} ${activeTab === 'artists' ? styles.activeTab : ''}`}
+                onClick={() => handleTabChange('artists')}
+              >
+                Artists {results.artists.length > 0 && `(${results.artists.length})`}
+              </button>
+              <button
+                type="button"
+                role="tab"
                 aria-selected={activeTab === 'albums'}
                 className={`${styles.tab} ${activeTab === 'albums' ? styles.activeTab : ''}`}
                 onClick={() => handleTabChange('albums')}
@@ -198,11 +215,20 @@ function SearchContent() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={activeTab === 'artists'}
-                className={`${styles.tab} ${activeTab === 'artists' ? styles.activeTab : ''}`}
-                onClick={() => handleTabChange('artists')}
+                aria-selected={activeTab === 'soundtracks'}
+                className={`${styles.tab} ${activeTab === 'soundtracks' ? styles.activeTab : ''}`}
+                onClick={() => handleTabChange('soundtracks')}
               >
-                Artists {results.artists.length > 0 && `(${results.artists.length})`}
+                Soundtracks {results.soundtracks.length > 0 && `(${results.soundtracks.length})`}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'eps'}
+                className={`${styles.tab} ${activeTab === 'eps' ? styles.activeTab : ''}`}
+                onClick={() => handleTabChange('eps')}
+              >
+                EPs & Singles {results.eps.length > 0 && `(${results.eps.length})`}
               </button>
               <button
                 type="button"
@@ -240,7 +266,7 @@ function SearchContent() {
               <Search size={40} className={styles.initialIcon} aria-hidden="true" />
               <h2 className={styles.initialTitle}>Start searching</h2>
               <p className={styles.initialText}>
-                Find music by album title, artist name, track name, or discover fellow collectors.
+                Discover artists, studio albums, film soundtracks, singles & EPs, tracks, or fellow music lovers.
               </p>
             </div>
           )}
@@ -249,45 +275,9 @@ function SearchContent() {
             <div className={styles.emptyState}>
               <h2 className={styles.emptyTitle}>No results found</h2>
               <p className={styles.emptyText}>
-                We couldn&apos;t find anything matching &ldquo;<strong>{initialQuery}</strong>&rdquo;. Check your spelling or try broader terms.
+                We couldn&apos;t find anything matching &ldquo;<strong>{initialQuery}</strong>&rdquo;. Check your spelling or try alternative aliases.
               </p>
             </div>
-          )}
-
-          {/* Albums Section */}
-          {(activeTab === 'all' || activeTab === 'albums') && results.albums.length > 0 && (
-            <section className={styles.resultSection} aria-labelledby="albums-heading">
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionTitleRow}>
-                  <Disc3 size={20} aria-hidden="true" />
-                  <h2 id="albums-heading" className={styles.sectionTitle}>
-                    Albums
-                  </h2>
-                </div>
-                {activeTab === 'all' && results.albums.length >= 5 && (
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange('albums')}
-                    className={styles.viewAllBtn}
-                  >
-                    View all albums &rarr;
-                  </button>
-                )}
-              </div>
-              <AlbumGrid columns={5}>
-                {results.albums.map((album) => (
-                  <AlbumCard
-                    key={album.id}
-                    slug={album.slug}
-                    title={album.title}
-                    artistName={album.artistName || 'Unknown Artist'}
-                    coverUrl={album.coverUrl}
-                    releaseDate={album.releaseDate}
-                    albumType={album.albumType}
-                  />
-                ))}
-              </AlbumGrid>
-            </section>
           )}
 
           {/* Artists Section */}
@@ -300,7 +290,7 @@ function SearchContent() {
                     Artists
                   </h2>
                 </div>
-                {activeTab === 'all' && results.artists.length >= 5 && (
+                {activeTab === 'all' && results.artists.length >= 6 && (
                   <button
                     type="button"
                     onClick={() => handleTabChange('artists')}
@@ -339,6 +329,114 @@ function SearchContent() {
             </section>
           )}
 
+          {/* Studio Albums Section */}
+          {(activeTab === 'all' || activeTab === 'albums') && results.albums.length > 0 && (
+            <section className={styles.resultSection} aria-labelledby="albums-heading">
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitleRow}>
+                  <Disc3 size={20} aria-hidden="true" />
+                  <h2 id="albums-heading" className={styles.sectionTitle}>
+                    Studio Albums
+                  </h2>
+                </div>
+                {activeTab === 'all' && results.albums.length >= 5 && (
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('albums')}
+                    className={styles.viewAllBtn}
+                  >
+                    View all albums &rarr;
+                  </button>
+                )}
+              </div>
+              <AlbumGrid columns={5}>
+                {results.albums.map((album) => (
+                  <AlbumCard
+                    key={album.id}
+                    slug={album.slug}
+                    title={album.title}
+                    artistName={album.artistName || 'Unknown Artist'}
+                    coverUrl={album.coverUrl}
+                    releaseDate={album.releaseDate}
+                    albumType={album.albumType}
+                  />
+                ))}
+              </AlbumGrid>
+            </section>
+          )}
+
+          {/* Soundtracks & Film Scores Section */}
+          {(activeTab === 'all' || activeTab === 'soundtracks') && results.soundtracks.length > 0 && (
+            <section className={styles.resultSection} aria-labelledby="soundtracks-heading">
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitleRow}>
+                  <Clapperboard size={20} aria-hidden="true" />
+                  <h2 id="soundtracks-heading" className={styles.sectionTitle}>
+                    Soundtracks & Film Scores
+                  </h2>
+                </div>
+                {activeTab === 'all' && results.soundtracks.length >= 5 && (
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('soundtracks')}
+                    className={styles.viewAllBtn}
+                  >
+                    View all soundtracks &rarr;
+                  </button>
+                )}
+              </div>
+              <AlbumGrid columns={5}>
+                {results.soundtracks.map((album) => (
+                  <AlbumCard
+                    key={album.id}
+                    slug={album.slug}
+                    title={album.title}
+                    artistName={album.artistName || 'Soundtrack'}
+                    coverUrl={album.coverUrl}
+                    releaseDate={album.releaseDate}
+                    albumType="soundtrack"
+                  />
+                ))}
+              </AlbumGrid>
+            </section>
+          )}
+
+          {/* EPs & Singles Section */}
+          {(activeTab === 'all' || activeTab === 'eps') && results.eps.length > 0 && (
+            <section className={styles.resultSection} aria-labelledby="eps-heading">
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitleRow}>
+                  <Disc3 size={20} aria-hidden="true" />
+                  <h2 id="eps-heading" className={styles.sectionTitle}>
+                    EPs & Singles
+                  </h2>
+                </div>
+                {activeTab === 'all' && results.eps.length >= 5 && (
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('eps')}
+                    className={styles.viewAllBtn}
+                  >
+                    View all EPs & Singles &rarr;
+                  </button>
+                )}
+              </div>
+              <AlbumGrid columns={5}>
+                {results.eps.map((album) => (
+                  <AlbumCard
+                    key={album.id}
+                    slug={album.slug}
+                    title={album.title}
+                    artistName={album.artistName || 'Unknown Artist'}
+                    coverUrl={album.coverUrl}
+                    releaseDate={album.releaseDate}
+                    albumType={album.albumType}
+                  />
+                ))}
+              </AlbumGrid>
+            </section>
+          )}
+
           {/* Tracks Section */}
           {(activeTab === 'all' || activeTab === 'tracks') && results.tracks.length > 0 && (
             <section className={styles.resultSection} aria-labelledby="tracks-heading">
@@ -362,25 +460,38 @@ function SearchContent() {
               <div className={styles.trackList}>
                 {results.tracks.map((track) => (
                   <div key={track.id} className={styles.trackItem}>
-                    <div className={styles.trackInfo}>
-                      <span className={styles.trackTitle}>{track.title}</span>
-                      <div className={styles.trackSub}>
-                        <span className={styles.trackArtist}>{track.artistName}</span>
-                        {track.albumTitle && (
-                          <>
-                            <span className={styles.dot}>•</span>
-                            {track.albumSlug ? (
-                              <Link
-                                href={`/music/${track.albumSlug}`}
-                                className={styles.trackAlbumLink}
-                              >
-                                {track.albumTitle}
-                              </Link>
-                            ) : (
-                              <span>{track.albumTitle}</span>
-                            )}
-                          </>
-                        )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
+                      {track.coverUrl && (
+                        <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flexShrink: 0, background: 'var(--color-bg-recessed)' }}>
+                          <SafeImage src={track.coverUrl} alt={track.title} fallback={<Music size={18} style={{ opacity: 0.3 }} />} />
+                        </div>
+                      )}
+                      <div className={styles.trackInfo}>
+                        <span className={styles.trackTitle}>{track.title}</span>
+                        <div className={styles.trackSub}>
+                          <span className={styles.trackArtist}>{track.artistName}</span>
+                          {track.albumTitle && (
+                            <>
+                              <span className={styles.dot}>•</span>
+                              {track.albumSlug ? (
+                                <Link
+                                  href={`/music/${track.albumSlug}`}
+                                  className={styles.trackAlbumLink}
+                                >
+                                  {track.albumTitle}
+                                </Link>
+                              ) : (
+                                <span>{track.albumTitle}</span>
+                              )}
+                            </>
+                          )}
+                          {track.durationSeconds ? (
+                            <>
+                              <span className={styles.dot}>•</span>
+                              <span>{Math.floor(track.durationSeconds / 60)}:{String(track.durationSeconds % 60).padStart(2, '0')}</span>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                     {track.albumSlug && (
@@ -397,7 +508,7 @@ function SearchContent() {
             </section>
           )}
 
-          {/* Users Section */}
+          {/* Members / Users Section */}
           {(activeTab === 'all' || activeTab === 'users') && results.users.length > 0 && (
             <section className={styles.resultSection} aria-labelledby="users-heading">
               <div className={styles.sectionHeader}>

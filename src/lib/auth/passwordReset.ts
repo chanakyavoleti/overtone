@@ -24,6 +24,7 @@ export async function requestPasswordReset(email: string): Promise<{
   success: boolean;
   emailSent: boolean;
   message: string;
+  provider?: string;
   token?: string; // Included only in non-production environments for automated testing
 }> {
   const normalizedEmail = email.trim().toLowerCase();
@@ -75,7 +76,7 @@ export async function requestPasswordReset(email: string): Promise<{
     .run();
 
   // Send the reset email
-  await sendPasswordResetEmail({
+  const emailResult = await sendPasswordResetEmail({
     toEmail: user.email,
     resetToken: rawToken,
     username: user.username,
@@ -83,7 +84,8 @@ export async function requestPasswordReset(email: string): Promise<{
 
   return {
     success: true,
-    emailSent: true,
+    emailSent: emailResult.deliveredOrAccepted || emailResult.provider === 'unconfigured',
+    provider: emailResult.provider,
     message: 'If an account exists with this email, you will receive password reset instructions.',
     ...(process.env.NODE_ENV !== 'production' ? { token: rawToken } : {}),
   };

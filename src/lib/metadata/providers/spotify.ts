@@ -332,3 +332,98 @@ export async function fetchSpotifyTracks(spotifyAlbumId: string): Promise<Normal
     clearTimeout(timeoutId);
   }
 }
+
+
+export interface SpotifyMultiResult {
+  artists: NormalizedArtist[];
+  albums: NormalizedAlbum[];
+  tracks: Array<{
+    provider: 'spotify';
+    providerId: string;
+    title: string;
+    slug: string;
+    artistName: string;
+    albumTitle: string;
+    albumSlug: string;
+    coverUrl: string | null;
+    durationSeconds: number;
+    explicit: boolean;
+  }>;
+}
+
+/**
+ * Multi-entity search via Spotify (artists, albums, and tracks in a single call).
+ */
+export async function searchSpotifyMulti(
+  query: string,
+  limit = 6
+): Promise<SpotifyMultiResult> {
+  const token = await getSpotifyAccessToken();
+  if (!token) {
+    return { artists: [], albums: [], tracks: [] };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(
+      query
+    )}&type=artist,album,track&limit=${Math.min(limit, 10)}`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      return { artists: [], albums: [], tracks: [] };
+    }
+
+    const data = await res.json();
+
+    const artists: NormalizedArtist[] = (data.artists?.items || []).map((item: any) => ({
+      provider: 'spotify' as const,
+      providerId: item.id,
+      name: item.name,
+      slug: slugify(item.name || '', { lower: true, strict: true }) || `artist-${item.id}`,
+      imageUrl: item.images?.[0]?.url || null,
+      genres: item.genres || [],
+    }));
+
+    const albums: NormalizedAlbum[] = (data.albums?.items || []).map((item: any) => ({
+      provider: 'spotify' as const,
+      providerId: item.id,
+      title: item.name,
+      slug: slugify(`${item.name}-${item.release_date?.slice(0, 4) || ''}`, { lower: true, strict: true }) || `album-${item.id}`,
+      artistName: item.artists?.[0]?.name,
+      releaseDate: item.release_date || null,
+      albumType: classifyAlbumType(item.name, item.album_type, item.total_tracks),
+      coverUrl: item.images?.[0]?.url || null,
+      trackCount: item.total_tracks || 0,
+    }));
+
+    const tracks = (data.tracks?.items || []).map((item: any) => {
+      const album = item.album || {};
+      const albumSlug = slugify(album.name || 'album', { lower: true, strict: true });
+      return {
+        provider: 'spotify' as const,
+        providerId: item.id,
+        title: item.name,
+        slug: slugify(item.name || 'track', { lower: true, strict: true }),
+        artistName: item.artists?.[0]?.name || 'Unknown Artist',
+        albumTitle: album.name || '',
+        albumSlug,
+        coverUrl: album.images?.[0]?.url || null,
+        durationSeconds: Math.round((item.duration_ms || 0) / 1000),
+        explicit: Boolean(item.explicit),
+      };
+    });
+
+    return { artists, albums, tracks };
+  } catch {
+    return { artists: [], albums: [], tracks: [] };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}

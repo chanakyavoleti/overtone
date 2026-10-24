@@ -353,43 +353,7 @@ export async function enrichArtistDiscographyUnified(
     }
   }
 
-  // PURGE LEGACY THIRD-PARTY JUNK:
-  // If we discovered official releases from Spotify, delete any legacy albums for this artist
-  // that do NOT match any official Spotify release and have no user ratings.
-  if (discoveredReleases.length > 0) {
-    const validSpotifyTitles = new Set(
-      discoveredReleases.map(d => normalizeAlbumTitle(d.title))
-    );
-
-    const currentArtistAlbums = db.select().from(albums).where(eq(albums.artistId, artistId)).all();
-    for (const ca of currentArtistAlbums) {
-      // If it's already a verified Spotify album, keep it
-      if (ca.providerId && ca.coverUrl?.includes('scdn.co')) {
-        continue;
-      }
-
-      // Check if user has rated or reviewed it
-      const hasRating = db
-        .select({ id: ratings.id })
-        .from(ratings)
-        .where(and(eq(ratings.targetType, 'album'), eq(ratings.targetId, ca.id)))
-        .get();
-
-      if (hasRating) {
-        continue;
-      }
-
-      const normCaTitle = normalizeAlbumTitle(ca.title);
-      if (!validSpotifyTitles.has(normCaTitle)) {
-        // Delete junk third-party album and its tracks
-        db.delete(tracks).where(eq(tracks.albumId, ca.id)).run();
-        db.delete(albumArtists).where(eq(albumArtists.albumId, ca.id)).run();
-        db.delete(albums).where(eq(albums.id, ca.id)).run();
-      }
-    }
-  }
-
-  // Store albums in SQLite
+  // Store albums in SQLite (idempotent enrichment: never delete existing albums)
   let storedCount = 0;
   let artworkCount = 0;
   let tracksCount = 0;

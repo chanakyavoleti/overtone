@@ -186,6 +186,34 @@
   font-weight: 600;
 }
 
+.typeBadge {
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-recessed);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.typeBadgeArtist {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.typeBadgeSoundtrack {
+  background: rgba(234, 179, 8, 0.12);
+  color: #eab308;
+}
+
+.typeBadgeTrack {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+}
+
 .noResults {
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);

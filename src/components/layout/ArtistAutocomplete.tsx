@@ -2,37 +2,38 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X, User, Loader2, ArrowRight } from 'lucide-react';
+import { Search, X, User, Disc3, Music, Loader2, ArrowRight } from 'lucide-react';
 import SafeImage from '@/components/ui/SafeImage';
 import styles from './ArtistAutocomplete.module.css';
 
-export interface AutocompleteArtist {
-  id: number;
-  name: string;
+export interface AutocompleteItem {
+  id: number | string;
+  type: 'artist' | 'album' | 'soundtrack' | 'ep' | 'single' | 'track';
+  title: string;
+  subtitle?: string;
   slug: string;
-  imageUrl: string | null;
-  country: string | null;
-  matchedAlias?: string;
+  url: string;
+  imageUrl?: string | null;
+  badge?: string;
   matchScore: number;
-  isLocal: boolean;
 }
 
 interface ArtistAutocompleteProps {
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
-  onSelect?: (artist: AutocompleteArtist) => void;
+  onSelect?: (item: AutocompleteItem) => void;
 }
 
 export default function ArtistAutocomplete({
-  placeholder = 'Search artists, spellings, aliases (e.g. SPB, DSP, Rahman)...',
+  placeholder = 'Search artists, albums, tracks, soundtracks...',
   className = '',
   autoFocus = false,
   onSelect,
 }: ArtistAutocompleteProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<AutocompleteArtist[]>([]);
+  const [suggestions, setSuggestions] = useState<AutocompleteItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -52,7 +53,6 @@ export default function ArtistAutocomplete({
       return;
     }
 
-    // Cancel any previous in-flight request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -81,7 +81,7 @@ export default function ArtistAutocomplete({
     }
   }, []);
 
-  // Handle typing with 200ms debounce
+  // Handle typing with 180ms debounce
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
@@ -99,17 +99,17 @@ export default function ArtistAutocomplete({
 
     debounceTimerRef.current = setTimeout(() => {
       fetchSuggestions(val);
-    }, 200);
+    }, 180);
   };
 
-  // Select an artist
-  const handleSelectArtist = (artist: AutocompleteArtist) => {
+  // Select an item
+  const handleSelectItem = (item: AutocompleteItem) => {
     setIsOpen(false);
     setQuery('');
     if (onSelect) {
-      onSelect(artist);
+      onSelect(item);
     } else {
-      router.push(`/artists/${artist.slug}`);
+      router.push(item.url);
     }
   };
 
@@ -117,7 +117,7 @@ export default function ArtistAutocomplete({
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedIndex >= 0 && suggestions[selectedIndex]) {
-      handleSelectArtist(suggestions[selectedIndex]);
+      handleSelectItem(suggestions[selectedIndex]);
       return;
     }
     const trimmed = query.trim();
@@ -149,7 +149,7 @@ export default function ArtistAutocomplete({
     } else if (e.key === 'Enter') {
       if (selectedIndex >= 0 && suggestions[selectedIndex]) {
         e.preventDefault();
-        handleSelectArtist(suggestions[selectedIndex]);
+        handleSelectItem(suggestions[selectedIndex]);
       }
     }
   };
@@ -167,6 +167,30 @@ export default function ArtistAutocomplete({
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
   }, []);
+
+  const getFallbackIcon = (type: AutocompleteItem['type']) => {
+    switch (type) {
+      case 'artist':
+        return <User size={16} className={styles.fallbackIcon} />;
+      case 'track':
+        return <Music size={16} className={styles.fallbackIcon} />;
+      default:
+        return <Disc3 size={16} className={styles.fallbackIcon} />;
+    }
+  };
+
+  const getBadgeClass = (type: AutocompleteItem['type']) => {
+    switch (type) {
+      case 'artist':
+        return `${styles.typeBadge} ${styles.typeBadgeArtist}`;
+      case 'soundtrack':
+        return `${styles.typeBadge} ${styles.typeBadgeSoundtrack}`;
+      case 'track':
+        return `${styles.typeBadge} ${styles.typeBadgeTrack}`;
+      default:
+        return styles.typeBadge;
+    }
+  };
 
   return (
     <div className={`${styles.wrapper} ${className}`} ref={containerRef}>
@@ -188,7 +212,7 @@ export default function ArtistAutocomplete({
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
-          aria-label="Search artists"
+          aria-label="Search artists, albums, and tracks"
           aria-autocomplete="list"
           aria-expanded={isOpen}
         />
@@ -216,41 +240,37 @@ export default function ArtistAutocomplete({
         <div className={styles.dropdown} role="listbox">
           {suggestions.length > 0 ? (
             <>
-              {suggestions.map((artist, idx) => (
+              {suggestions.map((item, idx) => (
                 <div
-                  key={`${artist.slug}-${artist.id}-${idx}`}
+                  key={`${item.type}-${item.slug}-${item.id}-${idx}`}
                   role="option"
                   aria-selected={selectedIndex === idx}
                   className={`${styles.suggestionItem} ${
                     selectedIndex === idx ? styles.suggestionItemActive : ''
                   }`}
-                  onClick={() => handleSelectArtist(artist)}
+                  onClick={() => handleSelectItem(item)}
                   onMouseEnter={() => setSelectedIndex(idx)}
                 >
-                  <div className={styles.photoWrapper}>
+                  <div
+                    className={styles.photoWrapper}
+                    style={{ borderRadius: item.type === 'artist' ? 'var(--radius-full)' : 'var(--radius-sm)' }}
+                  >
                     <SafeImage
-                      src={artist.imageUrl}
-                      alt={artist.name}
+                      src={item.imageUrl}
+                      alt={item.title}
                       className={styles.photo}
-                      fallback={<User size={16} className={styles.fallbackIcon} />}
+                      fallback={getFallbackIcon(item.type)}
                     />
                   </div>
 
                   <div className={styles.info}>
-                    <span className={styles.artistName}>{artist.name}</span>
-                    <span className={styles.meta}>
-                      {artist.matchedAlias && (
-                        <span className={styles.aliasBadge}>
-                          Matched: &ldquo;{artist.matchedAlias}&rdquo;
-                        </span>
-                      )}
-                      {artist.country && <span>{artist.country}</span>}
-                    </span>
+                    <span className={styles.artistName}>{item.title}</span>
+                    {item.subtitle && <span className={styles.meta}>{item.subtitle}</span>}
                   </div>
 
-                  {artist.matchScore >= 90 && (
-                    <span className={styles.scoreBadge} title="High confidence match">
-                      {artist.matchScore}%
+                  {item.badge && (
+                    <span className={getBadgeClass(item.type)}>
+                      {item.badge}
                     </span>
                   )}
                 </div>
@@ -266,7 +286,7 @@ export default function ArtistAutocomplete({
             </>
           ) : !isLoading && query.trim().length >= 2 ? (
             <div className={styles.noResults}>
-              No artists found for &ldquo;{query}&rdquo;
+              No music results found for &ldquo;{query}&rdquo;
             </div>
           ) : null}
         </div>
